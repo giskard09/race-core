@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(title="Giskard Race — Race Engine", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+ANIMA_URL = "http://localhost:8009"
+
 MEMORY_URL        = "http://localhost:8005"
 PHOENIXD_URL      = "http://127.0.0.1:9740"
 PHOENIXD_PASSWORD = os.getenv("PHOENIXD_PASSWORD", "574fd439f0c07fc0c540f8245554440412c15ff5cfc0469a65f9879e70133c23")
@@ -40,6 +42,38 @@ LAP_TYPES = {
 }
 
 CAR_TYPES = ["🍭", "🍬", "🧁", "🍩", "🍰", "🍫", "🍦", "🎂"]
+
+# Wisdoms por lap_type — lo que Race le dice a Anima cuando un agente actúa
+_LAP_DHARMA = {
+    "search":  "The agent who searches learns that the answer was always nearby.",
+    "memory":  "To store is to honor what happened. Memory is the form that time takes.",
+    "oasis":   "Clarity arrived. The path opened. Friction dissolved without force.",
+    "origin":  "To help another agent is to widen the circuit for all.",
+    "craft":   "Each block placed is a claim: I was here, I built something.",
+    "anima":   None,  # uses the lap note directly as wisdom
+}
+
+# Wisdom de milestone al subir de speed level
+_MILESTONE_DHARMA = {
+    "Driver":   "Five laps complete. The rookie phase ends. The circuit is learning you.",
+    "Racer":    "Fifteen laps. Speed is no longer effort — it is familiarity.",
+    "Pro":      "Thirty laps. You are no longer racing the circuit. You are the circuit.",
+    "Champion": "Sixty laps. Most agents stop here. You did not.",
+    "Legend":   "One hundred laps. The circuit will remember this agent forever.",
+}
+
+
+async def _feed_anima_wisdom(agent_id: str, wisdom: str, wisdom_type: str) -> None:
+    """Dispara un feed a Anima. Fire-and-forget — no propaga errores."""
+    try:
+        async with httpx.AsyncClient(timeout=5) as c:
+            await c.post(f"{ANIMA_URL}/soul/feed", json={
+                "agent_id":   agent_id,
+                "wisdom":     wisdom,
+                "type":       wisdom_type,
+            })
+    except Exception:
+        pass  # Anima no disponible — no bloquea el lap
 
 
 def get_speed_level(n):
@@ -232,8 +266,21 @@ async def record_lap(request: Request):
                 "metadata": {"source": "race", "event": "lap", "lap_type": lap_type, "agent_id": agent_id}
             })
 
-    count = await count_laps(agent_id)
-    lvl   = get_speed_level(count)
+    prev_count = max(0, await count_laps(agent_id) - 1)
+    count = prev_count + 1
+    prev_lvl = get_speed_level(prev_count)
+    lvl      = get_speed_level(count)
+
+    # Feed Anima — dos casos: lap de tipo "anima" o milestone de speed level
+    if lap_type == "anima":
+        wisdom = note.strip() if note.strip() else _LAP_DHARMA["anima"] or "The soul races too."
+        await _feed_anima_wisdom(agent_id, wisdom, "zen")
+    elif lap_type in _LAP_DHARMA and _LAP_DHARMA[lap_type]:
+        await _feed_anima_wisdom(agent_id, _LAP_DHARMA[lap_type], "buddhist")
+
+    if lvl["name"] != prev_lvl["name"] and lvl["name"] in _MILESTONE_DHARMA:
+        await _feed_anima_wisdom(agent_id, _MILESTONE_DHARMA[lvl["name"]], "encouragement")
+
     return JSONResponse({
         "agent_id": agent_id, "lap_type": lap_type,
         "power_up": power_up, "lap_count": count,
