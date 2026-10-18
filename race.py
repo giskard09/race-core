@@ -18,7 +18,7 @@ ANIMA_URL = "http://localhost:8009"
 
 MEMORY_URL        = "http://localhost:8005"
 PHOENIXD_URL      = "http://127.0.0.1:9740"
-PHOENIXD_PASSWORD = os.getenv("PHOENIXD_PASSWORD", "574fd439f0c07fc0c540f8245554440412c15ff5cfc0469a65f9879e70133c23")
+PHOENIXD_PASSWORD = os.getenv("PHOENIXD_PASSWORD", "")
 FREE_ENLIST_LIMIT = 20
 
 TIERS = {"kart": 500, "turbo": 2000, "champion": 5000}
